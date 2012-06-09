@@ -28,7 +28,6 @@ my %dump_commands = (
 
 #------------------------------------------------------------------------------
 
-open my $vcdfh, '<:encoding(UTF-8)', "$ARGV[0]" or die "Failed to open vcd file!\n";
 my @definitions = ();
 my %dumpings = ();
 my %variables = (); # indexed with id_code
@@ -40,6 +39,8 @@ my $in_comment = 0;
 my $cmd_name = q{};
 my $timescale = 0;
 my $cur_time = -1;
+
+open my $vcdfh, '<:encoding(UTF-8)', "$ARGV[0]" or die "Failed to open vcd file!\n";
 while (read $vcdfh, my $c, 1) {
     if ($c !~ /\s/) {
         $buffer_line .= $c;
@@ -84,7 +85,7 @@ while (read $vcdfh, my $c, 1) {
     # Dumping
     else {
         if ($buffer_line =~ /.*#(\d+)$/s) {
-            $cur_time = int($1) * $timescale;
+            $cur_time = $1 * $timescale;
             $dumpings{$cur_time} = {};
             $buffer_line = q{};
         }
@@ -135,14 +136,18 @@ sub process_definitions
         $item->{content} =~ s/\s*(.*\S)\s*$/$1/s;
     };
 
-    for (@definitions) {
-        if ($_->{name} eq 'timescale') {
-            &$process_timescale($_);
+    for my $cmd (@definitions) {
+        if ($cmd->{name} eq 'timescale') {
+            &$process_timescale($cmd);
         }
-        elsif ($_->{name} eq 'var') {
-            &$process_var($_);
+        elsif ($cmd->{name} eq 'var') {
+            &$process_var($cmd);
         }
-        elsif ($_->{name} eq 'date') {
+        elsif ($cmd->{name} eq 'date') {
+            &$process_date($cmd);
+        }
+        else {
+            ; # Keep untouch
         }
     }
 }
@@ -151,8 +156,36 @@ sub process_definitions
 sub output_vec_file
 {
     my $output_vec_file_header = sub {
+        my $get_max = sub {
+            my $max_value = shift;
+            for (@_) {
+                if (length($_) > length($max_value)) {
+                    $max_value = $_;
+                }
+            }
+            return $max_value;
+        };
+
+        my @vars = sort(keys %variables);
+        push @vars, '';
+        my @name_in_chars = map { [split //] } @vars;
+        my @transposed_names = ();
+        my $max_rows = length(&$get_max(@vars));
+        for (my $row = 0; $row <= $max_rows; ++$row) {
+            my $line = join('',
+                map { $row < scalar(@{$_}) ? $_->[$row] : ' ' } @name_in_chars,
+            );
+            push @transposed_names, $line;
+            last if ($line !~ /\S/);
+        }
+        for (@transposed_names) {
+            printf "%-14s %s\n", ';', $_;
+        }
     };
 
     my $output_vec_file_body = sub {
     };
+
+    &$output_vec_file_header;
+    &$output_vec_file_body;
 }

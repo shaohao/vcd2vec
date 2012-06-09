@@ -91,8 +91,8 @@ class TerminalProgressBar(object):
     The timer can be disabled
     '''
 
-    BAR = '{0:3}% {{GREEN}}[{{BOLD}}{1}{{NORMAL}}{2}{{GREEN}}]{{NORMAL}}'
-    ETA_TIME = ' ETA {3:03}:{4:02}:{5:02}'
+    BAR = ' {0:3}% {{GREEN}}[{{BOLD}}{1}{{NORMAL}}{2}{{GREEN}}]{{NORMAL}}'
+    ETA_TIME = ' ETA {3:03}:{4:02}:{5:02} '
 
     def __init__(self, hdr_msg):
         self.term = Terminal()
@@ -101,18 +101,18 @@ class TerminalProgressBar(object):
 
         self.width = self.term.COLS or 75
 
-        sys.stdout.write(self.term.render('{BOLD}' + hdr_msg.strip() + '\n\n'))
+        sys.stdout.write(self.term.render('{NORMAL}{BOLD} ' + hdr_msg.strip() + '\n\n'))
 
     def update(self, percent, eta_seconds=-1):
         if eta_seconds < 0:
             hours, minutes, seconds = (0, 0, 0)
             bar = self.BAR
-            bar_width = self.width - 7
+            bar_width = self.width - 9
         else:
             (hours, mod) = divmod(eta_seconds, 60 * 60)
             (minutes, seconds) = divmod(mod, 60)
             bar = self.BAR + self.ETA_TIME
-            bar_width = self.width - 21
+            bar_width = self.width - 23
 
         bar += '\n'
         n = int(bar_width * percent)
@@ -136,10 +136,11 @@ class TerminalProgressBar(object):
 
 if __name__ == '__main__':
     term = Terminal()
-    print term.render('{RED}red{YELLOW}yellow')
+    print(term.render('{RED}red{YELLOW}yellow'))
 
     import time
-    pb = TerminalProgressBar('Downloading file ...')
-    for i in range(1, 101):
-        pb.update(i/100.0, 300 - i)
-        time.sleep(0.1)
+    for i in range(3):
+        pb = TerminalProgressBar('Downloading file {0} ...'.format(i))
+        for t in range(1, 101):
+            pb.update(t/100.0, 300 - t)
+            time.sleep(0.1)
