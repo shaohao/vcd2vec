@@ -26,6 +26,19 @@ my %dump_commands = (
     dumpall => 1,
 );
 
+sub get_time_fs_from_string
+{
+    my $ts_str = shift;
+    $ts_str =~ /(\d+)\s*([munpf]?s)/;
+    return $1 * $time_precision{$2};
+}
+
+sub format_timestamp_from_fs
+{
+    my ($fs, $unit) = @_;
+    return $fs / $time_precision{$unit};
+}
+
 #------------------------------------------------------------------------------
 
 my @definitions = ();
@@ -152,40 +165,77 @@ sub process_definitions
     }
 }
 
+sub output_vec_file_header
+{
+    my $get_max = sub {
+        my $max_value = shift;
+        for (@_) {
+            if (length($_) > length($max_value)) {
+                $max_value = $_;
+            }
+        }
+        return $max_value;
+    };
+
+    my @vars = sort(keys %variables);
+    push @vars, '';
+    my @name_in_chars = map { [split //] } @vars;
+    my @transposed_names = ();
+    my $max_rows = length(&$get_max(@vars));
+    for (my $row = 0; $row <= $max_rows; ++$row) {
+        my $line = join('',
+            map { $row < scalar(@{$_}) ? $_->[$row] : ' ' } @name_in_chars,
+        );
+        push @transposed_names, $line;
+        last if ($line !~ /\S/);
+    }
+    for (@transposed_names) {
+        printf("%-13s %s\n", ';', $_);
+    }
+}
+
+sub output_vec_file_body
+{
+    my $vec_clk = shift;
+
+    my %sampled_values = ();
+    my @vcd_times = sort(keys %dumpings);
+    my ($vec_begin, $vec_end) = @vcd_times[0, $#vcd_times];
+    my $p = $vec_begin;
+    for (my $t = $vec_begin; $t <= $vec_end; $t += $vec_clk) {
+        my @run_times = ();
+
+        if ($t == $vec_begin) {
+            @run_times = ($vec_begin);
+        }
+        else {
+            @run_times = grep { $_ > $p and $_ <= $t; } @vcd_times;
+        }
+        for my $vcd_t (sort @run_times) {
+            map {
+                $sampled_values{$_} = $dumpings{$vcd_t}->{$_};
+            } keys(%{$dumpings{$vcd_t}});
+        }
+
+        if (@run_times) {
+            $p = $run_times[$#run_times];
+        }
+
+        printf("%13s %s\n",
+            format_timestamp_from_fs($t, 'ns'),
+            join('', values(%sampled_values)),
+        );
+    }
+}
 
 sub output_vec_file
 {
-    my $output_vec_file_header = sub {
-        my $get_max = sub {
-            my $max_value = shift;
-            for (@_) {
-                if (length($_) > length($max_value)) {
-                    $max_value = $_;
-                }
-            }
-            return $max_value;
-        };
+    my $vec_clk = get_time_fs_from_string(shift);
 
-        my @vars = sort(keys %variables);
-        push @vars, '';
-        my @name_in_chars = map { [split //] } @vars;
-        my @transposed_names = ();
-        my $max_rows = length(&$get_max(@vars));
-        for (my $row = 0; $row <= $max_rows; ++$row) {
-            my $line = join('',
-                map { $row < scalar(@{$_}) ? $_->[$row] : ' ' } @name_in_chars,
-            );
-            push @transposed_names, $line;
-            last if ($line !~ /\S/);
-        }
-        for (@transposed_names) {
-            printf "%-14s %s\n", ';', $_;
-        }
-    };
+    &output_vec_file_header;
 
-    my $output_vec_file_body = sub {
-    };
-
-    &$output_vec_file_header;
-    &$output_vec_file_body;
+    output_vec_file_body($vec_clk);
 }
+
+output_vec_file($ARGV[1]);
+
