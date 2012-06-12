@@ -45,6 +45,7 @@ my @definitions = ();
 my %dumpings = ();
 my %variables = (); # indexed with id_code
 my %ref_names = (); # indexed with id_code
+my @variable_names = ();
 
 my $buffer_line = q{};
 my $in_dumping = 0;
@@ -109,7 +110,7 @@ while (read $vcdfh, my $c, 1) {
         elsif ($buffer_line =~ /(.*)\$end$/s) {
             $buffer_line = q{};
         }
-        elsif ($buffer_line =~ /^([01xzXZ])(\S+)|b([01xzXZ])\s+(\S+)$/) {
+        elsif ($buffer_line =~ /^([01xzXZ])(\S+)|[bB]([01xzXZ])\s+(\S+)$/) {
             $dumpings{$cur_time}->{$ref_names{$2}} = $1;
             $buffer_line = q{};
         }
@@ -140,6 +141,7 @@ sub process_definitions
             ref_name => $4,
         };
         $item->{content} = $var;
+        push @variable_names, $4;
         $variables{$4} = $var;
         $ref_names{$3} = $4;
     };
@@ -177,7 +179,7 @@ sub output_vec_file_header
         return $max_value;
     };
 
-    my @vars = sort(keys %variables);
+    my @vars = @variable_names;
     push @vars, '';
     my @name_in_chars = map { [split //] } @vars;
     my @transposed_names = ();
@@ -223,7 +225,7 @@ sub output_vec_file_body
 
         printf("%13s %s\n",
             format_timestamp_from_fs($t, 'ns'),
-            join('', values(%sampled_values)),
+            join('', map { $sampled_values{$_}; } @variable_names),
         );
     }
 }
